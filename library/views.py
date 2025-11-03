@@ -7,6 +7,8 @@ from django.utils import timezone
 from .tasks import send_loan_notification
 from .serializers_extra import ExtendDueDateSerializer
 from datetime import timedelta
+from django.db.models import Count, Q
+from .serializers_extra import ActiveMemberSerializer
 
 class AuthorViewSet(viewsets.ModelViewSet):
     queryset = Author.objects.all()
@@ -54,6 +56,17 @@ class BookViewSet(viewsets.ModelViewSet):
 class MemberViewSet(viewsets.ModelViewSet):
     queryset = Member.objects.all()
     serializer_class = MemberSerializer
+    
+    @action(detail=False, method=["get"], url_path="top-active")
+    def top_active(self, request):
+        qs = (
+            Member.objects.selected_related("user")
+            .annotate(active_loans=Count("loans", filter=Q(loans_is_returned=False)))
+            .filter(active_loans__gt=0)
+            .prder_by("-active_loans", "id")[:5]
+        )
+        
+        return Response(ActiveMemberSerializer(qs, many=True).data)
 
 class LoanViewSet(viewsets.ModelViewSet):
     queryset = Loan.objects.all()
