@@ -9,6 +9,7 @@ router.register(r'books', views.BookViewSet)
 router.register(r'members', views.MemberViewSet)
 router.register(r'loans', views.LoanViewSet)
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
