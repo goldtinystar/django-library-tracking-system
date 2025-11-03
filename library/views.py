@@ -5,13 +5,19 @@ from .serializers import AuthorSerializer, BookSerializer, MemberSerializer, Loa
 from rest_framework.decorators import action
 from django.utils import timezone
 from .tasks import send_loan_notification
+from .serializers_extra import ExtendDueDateSerializer
+from datetime import timedelta
 
 class AuthorViewSet(viewsets.ModelViewSet):
     queryset = Author.objects.all()
     serializer_class = AuthorSerializer
 
 class BookViewSet(viewsets.ModelViewSet):
-    queryset = Book.objects.all()
+    queryset = (
+        Book.objects
+        .select_related("author")
+        .prefetch_related("genres")
+    )
     serializer_class = BookSerializer
 
     @action(detail=True, methods=['post'])
@@ -52,3 +58,16 @@ class MemberViewSet(viewsets.ModelViewSet):
 class LoanViewSet(viewsets.ModelViewSet):
     queryset = Loan.objects.all()
     serializer_class = LoanSerializer
+    
+    @action(detail=True, methods=["post"], url_path="extend_due_date")
+    def extend_due_date(self, request, pk=None):
+        loan = self.get_object()
+        
+        if loan.due_date and loan.due_date < timezone.now().date():
+            return Response({"detail": "Loan is already overdue."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        ser = ExtendDueDateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        loan.due_date(loan.due_date or loan.loan_date) + timedelta(days=ser.validated_data["additional_days"])
+        loan.save(update_fields=["due_date"])
+        return Response(LoanSerializer(loan).data, status=status.HTTP_200_OK)
